@@ -2,9 +2,10 @@ package Web::Hippie::PubSub;
 
 use strict;
 use warnings;
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 use parent 'Plack::Middleware';
 
+use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
 use Plack::Request;
@@ -15,9 +16,10 @@ use Web::Hippie::Pipe;
 use JSON;
 use Carp qw/croak cluck/;
 
-# required args for constructing PubSub client
+# bus = AnyMQ pubsub client bus
+# keep_alive = seconds between "ping" events
 use Plack::Util::Accessor qw/
-    bus
+    bus keep_alive
 /;
 
 sub call {
@@ -31,6 +33,8 @@ sub prepare_app {
 
     die "bus is a required builder argument for Web::Hippie::PubSub"
         unless $self->bus;
+
+    my $keep_alive = $self->keep_alive;
 
     my $builder = Plack::Builder->new;
 
@@ -50,6 +54,7 @@ sub prepare_app {
             my $env = shift;
             my $channel = $env->{'hippie.args'};
             my $req = Plack::Request->new($env);
+            my $h = $env->{'hippie.handle'};
 
             if ($req->path eq '/new_listener') {
                 # called when we get a new topic subscription
@@ -62,8 +67,20 @@ sub prepare_app {
                 }
 
                 # subscribe client to events on $channel
-                $env->{'hippie.listener'}->subscribe($topic);
-                my $res = $app->($env);
+                my $res;
+                my $ok = eval {
+                    $env->{'hippie.listener'}->subscribe($topic);
+                    $res = $app->($env);
+                    1;
+                };
+
+                unless ($ok) {
+                    warn "Error subscribing to topic '$topic': $@";
+                }
+
+                $self->start_keepalive_timer($env);
+                
+                # success
                 return $res || [ '200', [ 'Content-Type' => 'text/plain' ], [ "Now listening on $channel" ] ];
 
             } elsif ($req->path eq '/message') {
@@ -84,21 +101,8 @@ sub prepare_app {
 
                 my $res = $app->($env);
                 return $res || [ '200', [ 'Content-Type' => 'text/plain' ], [ "Event published on $channel" ] ];
-            } else {
-                # other message (should only be error)
-                # make sure stuff is kosher
-
-                my $res = $app->($env);
-                
-                my $h = $env->{'hippie.handle'}
-                    or return $res || [ '400', [ 'Content-Type' => 'text/plain' ], [ "missing handle" ] ];
-
-                if ($req->path eq '/error') {
-                    warn "==> disconnecting $h (error or timeout)\n";
-                } else {
-                    warn "unknown hippie message: " . $req->path;
-                    return $res || [ '500', [ 'Content-Type' => 'text/plain' ], [ 'Unknown error' ] ];
-                }
+            } elsif ($req->path eq '/error') {
+                $self->stop_keepalive_timer($env);
             }
 
             my $res = $app->($env);
@@ -109,6 +113,40 @@ sub prepare_app {
     });
 
     $self->app( $builder->to_app($self->app) );
+}
+
+sub start_keepalive_timer {
+    my ($self, $env) = @_;
+
+    return unless $self->keep_alive;
+
+    my $h = $env->{'hippie.handle'};
+    
+    my $w = AnyEvent->timer(
+        interval => $self->keep_alive,
+        cb => sub {
+            my $ok = eval {
+                $h->send_msg({
+                    type => 'ping',
+                    time => AnyEvent->now,
+                });
+                1;
+            };
+
+            # client has disconnected, stop firing
+            unless ($ok) {
+                $self->stop_keepalive_timer($env);
+            }
+        }
+    );
+    $env->{'hippie.listener'}->{keepalive_timer} = $w;
+}
+
+sub stop_keepalive_timer {
+    my ($self, $env) = @_;
+    
+    delete $env->{'hippie.listener'}->{keepalive_timer}
+        if $env->{'hippie.listener'};
 }
 
 1;
@@ -140,7 +178,9 @@ Web::Hippie::PubSub - Comet/Long-poll event server using AnyMQ
   builder {
     # mount hippie server
     mount '/_hippie' => builder {
-      enable "+Web::Hippie::PubSub", bus => $bus;
+      enable "+Web::Hippie::PubSub",
+        keep_alive => 30,   # send 'ping' event every 30 seconds
+        bus        => $bus;
       sub {
         my $env = shift;
         my $args = $env->{'hippie.args'};
@@ -150,6 +190,23 @@ Web::Hippie::PubSub - Comet/Long-poll event server using AnyMQ
     };
     mount '/' => my $app;
   };
+
+=head1 ATTRIBUTES
+
+=over 4
+
+=title bus
+
+=cut
+
+AnyMQ bus configured for publish/subscribe events
+
+=title keep_alive
+
+Number of seconds between keep-alive events. ZMQ::Server will send a
+"ping" event to keep connections alive. Set to zero to disable.
+
+=back
 
 =head1 DESCRIPTION
 

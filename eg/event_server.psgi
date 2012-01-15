@@ -58,7 +58,9 @@ builder {
 
     # anymq hippie server
     mount '/_hippie' => builder {
-        enable "+Web::Hippie::PubSub", bus => $mq_bus;
+        enable "+Web::Hippie::PubSub",
+            keep_alive => 5,
+            bus        => $mq_bus;
         sub {
             my ($env) = @_;
 
@@ -72,7 +74,7 @@ builder {
                 my $msg = $env->{'hippie.message'};
                 warn "Posting message to channel $channel\n";
             } elsif ($path eq '/error') {
-                warn "Got hippie error\n";
+                # client disconnected
             } else {
                 warn "Unknown hippie event: $path\n";
             }
