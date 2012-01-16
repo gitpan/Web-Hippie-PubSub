@@ -2,7 +2,7 @@ package Web::Hippie::PubSub;
 
 use strict;
 use warnings;
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 use parent 'Plack::Middleware';
 
 use AnyEvent;
@@ -195,13 +195,13 @@ Web::Hippie::PubSub - Comet/Long-poll event server using AnyMQ
 
 =over 4
 
-=title bus
+=head2 bus
 
 =cut
 
 AnyMQ bus configured for publish/subscribe events
 
-=title keep_alive
+=head2 keep_alive
 
 Number of seconds between keep-alive events. ZMQ::Server will send a
 "ping" event to keep connections alive. Set to zero to disable.

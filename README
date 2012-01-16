@@ -32,8 +32,10 @@ SYNOPSIS
       };
 
 ATTRIBUTES
-        Number of seconds between keep-alive events. ZMQ::Server will send a
-        "ping" event to keep connections alive. Set to zero to disable.
+  bus
+  keep_alive
+    Number of seconds between keep-alive events. ZMQ::Server will send a
+    "ping" event to keep connections alive. Set to zero to disable.
 
 DESCRIPTION
     This module adds publish/subscribe capabilities to Web::Hippie using
@@ -62,8 +64,8 @@ POD ERRORS
     below:
 
     Around line 198:
-        Unknown directive: =title
+        You forgot a '=back' before '=head2'
 
-    Around line 204:
-        Unknown directive: =title
+    Around line 209:
+        =back without =over
 
