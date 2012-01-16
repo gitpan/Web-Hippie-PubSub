@@ -32,10 +32,11 @@ SYNOPSIS
       };
 
 ATTRIBUTES
-  bus
-  keep_alive
-    Number of seconds between keep-alive events. ZMQ::Server will send a
-    "ping" event to keep connections alive. Set to zero to disable.
+    bus AnyMQ bus configured for publish/subscribe events
+
+    keep_alive
+        Number of seconds between keep-alive events. ZMQ::Server will send a
+        "ping" event to keep connections alive. Set to zero to disable.
 
 DESCRIPTION
     This module adds publish/subscribe capabilities to Web::Hippie using
@@ -58,14 +59,4 @@ AUTHOR
 LICENSE
     This library is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.
-
-POD ERRORS
-    Hey! The above document had some coding errors, which are explained
-    below:
-
-    Around line 198:
-        You forgot a '=back' before '=head2'
-
-    Around line 209:
-        =back without =over
 
